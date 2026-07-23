@@ -13,18 +13,15 @@ MODEL_PATH = os.path.join(SCRIPT_DIR, "model.tflite")
 
 
 def main():
-    # ---------------------------------------------------------
     # 1. Verificação do model.tflite
-    # ---------------------------------------------------------
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(
             'O arquivo "model.tflite" não foi encontrado. '
             'Execute primeiro train_model.py e optimize_model.py.'
         )
 
-    # ---------------------------------------------------------
     # 2. Carregamento do modelo otimizado
-    # ---------------------------------------------------------
+    
     interpreter = tf.lite.Interpreter(
         model_path=MODEL_PATH
     )
@@ -38,9 +35,7 @@ def main():
     print(f"Shape: {input_details[0]['shape']}")
     print(f"Tipo: {input_details[0]['dtype']}")
 
-    # ---------------------------------------------------------
     # 3. Carregamento do conjunto de teste
-    # ---------------------------------------------------------
     (_, _), (x_test, y_test) = (
         tf.keras.datasets.mnist.load_data()
     )
@@ -51,9 +46,7 @@ def main():
     # De (28, 28) para (28, 28, 1)
     x_test = np.expand_dims(x_test, axis=-1)
 
-    # ---------------------------------------------------------
     # 4. Inferência em cinco amostras
-    # ---------------------------------------------------------
     print(
         f"\nRodando inferência em {N_SAMPLES} amostras "
         "usando model.tflite:\n"
@@ -62,8 +55,7 @@ def main():
     correct_predictions = 0
 
     for i in range(N_SAMPLES):
-        # Adiciona dimensão do batch:
-        # (28, 28, 1) -> (1, 28, 28, 1)
+        # Adiciona dimensão: (28, 28, 1) -> (1, 28, 28, 1)
         sample = np.expand_dims(
             x_test[i],
             axis=0,
@@ -73,16 +65,13 @@ def main():
             input_details[0]["dtype"]
         )
 
-        # Coloca a imagem na entrada do modelo
         interpreter.set_tensor(
             input_details[0]["index"],
             sample,
         )
 
-        # Executa a inferência
         interpreter.invoke()
 
-        # Obtém a saída
         prediction = interpreter.get_tensor(
             output_details[0]["index"]
         )[0]

@@ -1,39 +1,116 @@
+import os
+
+# Força a execução apenas em CPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 import numpy as np
 import tensorflow as tf
 
-# ---------------------------------------------------------------------------
-# Projeto 1 — Inferência com o Modelo Otimizado (model.tflite)
-#
-# Requisitos (veja README.md desta pasta para detalhes completos):
-#   1. Carregar especificamente o "model.tflite" (o artefato de edge, não o
-#      model.h5) usando tf.lite.Interpreter
-#   2. Rodar inferência em pelo menos 5 amostras do conjunto de teste do MNIST
-#   3. Imprimir no terminal, para cada amostra: classe predita vs. classe real
-# ---------------------------------------------------------------------------
-
 N_SAMPLES = 5
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(SCRIPT_DIR, "model.tflite")
 
 
 def main():
-    import os
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    interpreter = tf.lite.Interpreter(model_path=os.path.join(script_dir, "model.tflite"))
+    # ---------------------------------------------------------
+    # 1. Verificação do model.tflite
+    # ---------------------------------------------------------
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(
+            'O arquivo "model.tflite" não foi encontrado. '
+            'Execute primeiro train_model.py e optimize_model.py.'
+        )
+
+    # ---------------------------------------------------------
+    # 2. Carregamento do modelo otimizado
+    # ---------------------------------------------------------
+    interpreter = tf.lite.Interpreter(
+        model_path=MODEL_PATH
+    )
+
     interpreter.allocate_tensors()
+
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    (_, _), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    print("Informações da entrada:")
+    print(f"Shape: {input_details[0]['shape']}")
+    print(f"Tipo: {input_details[0]['dtype']}")
+
+    # ---------------------------------------------------------
+    # 3. Carregamento do conjunto de teste
+    # ---------------------------------------------------------
+    (_, _), (x_test, y_test) = (
+        tf.keras.datasets.mnist.load_data()
+    )
+
+    # Normalização para [0, 1]
     x_test = x_test.astype("float32") / 255.0
+
+    # De (28, 28) para (28, 28, 1)
     x_test = np.expand_dims(x_test, axis=-1)
 
-    print(f"Rodando inferencia em {N_SAMPLES} amostras usando model.tflite:\n")
+    # ---------------------------------------------------------
+    # 4. Inferência em cinco amostras
+    # ---------------------------------------------------------
+    print(
+        f"\nRodando inferência em {N_SAMPLES} amostras "
+        "usando model.tflite:\n"
+    )
+
+    correct_predictions = 0
+
     for i in range(N_SAMPLES):
-        sample = np.expand_dims(x_test[i], axis=0).astype(input_details[0]["dtype"])
-        interpreter.set_tensor(input_details[0]["index"], sample)
+        # Adiciona dimensão do batch:
+        # (28, 28, 1) -> (1, 28, 28, 1)
+        sample = np.expand_dims(
+            x_test[i],
+            axis=0,
+        )
+
+        sample = sample.astype(
+            input_details[0]["dtype"]
+        )
+
+        # Coloca a imagem na entrada do modelo
+        interpreter.set_tensor(
+            input_details[0]["index"],
+            sample,
+        )
+
+        # Executa a inferência
         interpreter.invoke()
-        pred = interpreter.get_tensor(output_details[0]["index"])[0]
-        predicted_class = int(np.argmax(pred))
-        print(f"Amostra {i + 1}: predito={predicted_class} | real={int(y_test[i])}")
+
+        # Obtém a saída
+        prediction = interpreter.get_tensor(
+            output_details[0]["index"]
+        )[0]
+
+        predicted_class = int(np.argmax(prediction))
+        real_class = int(y_test[i])
+
+        correct = predicted_class == real_class
+
+        if correct:
+            correct_predictions += 1
+            status = "ACERTOU"
+        else:
+            status = "ERROU"
+
+        print(
+            f"Amostra {i + 1}: "
+            f"predito={predicted_class} | "
+            f"real={real_class} | "
+            f"{status}"
+        )
+
+    print("\n----------------------------------------")
+    print(
+        f"Acertos nas amostras: "
+        f"{correct_predictions}/{N_SAMPLES}"
+    )
+    print("----------------------------------------")
 
 
 if __name__ == "__main__":
